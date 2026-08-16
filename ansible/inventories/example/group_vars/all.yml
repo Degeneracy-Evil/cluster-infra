@@ -1,0 +1,45 @@
+---
+cluster_name: example-cluster
+
+os_release: "24.04"
+timezone: Asia/Shanghai
+
+ansible_user: clusteradmin
+
+disable_unattended_upgrades: true
+kernel_hold: true
+
+base_packages:
+  - vim
+  - curl
+  - wget
+  - git
+  - htop
+  - tmux
+  - rsync
+  - jq
+  - pciutils
+  - usbutils
+  - lsof
+  - tree
+
+# Add administrators only after replacing the example public key.
+base_admin_users: []
+#  - name: clusteradmin
+#    groups:
+#      - sudo
+#    authorized_keys:
+#      - "ssh-ed25519 REPLACE_WITH_A_REAL_PUBLIC_KEY operator@example"
+
+base_sysctl: {}
+#  vm.swappiness: "10"
+
+base_limits: []
+#  - domain: "*"
+#    type: soft
+#    item: nofile
+#    value: 1048576
+#  - domain: "*"
+#    type: hard
+#    item: nofile
+#    value: 1048576

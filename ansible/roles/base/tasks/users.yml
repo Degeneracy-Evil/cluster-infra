@@ -1,0 +1,40 @@
+---
+- name: Validate administrator definitions
+  ansible.builtin.assert:
+    that:
+      - item.name is defined
+      - item.name | length > 0
+      - item.state | default('present') in ['present', 'absent']
+    fail_msg: "Invalid base_admin_users entry: {{ item }}"
+    quiet: true
+  loop: "{{ base_admin_users }}"
+  loop_control:
+    label: "{{ item.name | default('undefined') }}"
+
+- name: Manage administrator accounts
+  ansible.builtin.user:
+    name: "{{ item.name }}"
+    state: "{{ item.state | default('present') }}"
+    groups: "{{ item.groups | default(['sudo']) }}"
+    append: "{{ item.append | default(true) }}"
+    shell: "{{ item.shell | default('/bin/bash') }}"
+    create_home: "{{ item.create_home | default(true) }}"
+    password: "{{ item.password | default(omit) }}"
+    password_lock: "{{ item.password_lock | default(omit) }}"
+    update_password: on_create
+  loop: "{{ base_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Manage administrator SSH authorized keys
+  ansible.posix.authorized_key:
+    user: "{{ item.name }}"
+    key: "{{ item.authorized_keys | join('\n') }}"
+    state: present
+    exclusive: "{{ item.exclusive_authorized_keys | default(false) }}"
+  loop: "{{ base_admin_users }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when:
+    - item.state | default('present') == 'present'
+    - item.authorized_keys | default([]) | length > 0

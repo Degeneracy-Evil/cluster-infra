@@ -1,0 +1,30 @@
+---
+base_apt_cache_valid_time: 3600
+
+base_required_packages:
+  - openssh-server
+  - systemd-timesyncd
+
+base_packages: []
+disable_unattended_upgrades: true
+kernel_hold: true
+
+timezone: Etc/UTC
+
+# These defaults improve connection health without changing authentication
+# methods, so enabling the role cannot accidentally lock out administrators.
+base_ssh_settings:
+  ClientAliveInterval: "300"
+  ClientAliveCountMax: "2"
+
+base_admin_users: []
+# Each item supports:
+# name, groups, shell, create_home, state, password, password_lock,
+# authorized_keys, and exclusive_authorized_keys.
+
+base_sysctl: {}
+# Example: { vm.swappiness: "10" }
+
+base_limits: []
+# Example:
+# - { domain: "*", type: soft, item: nofile, value: 1048576 }

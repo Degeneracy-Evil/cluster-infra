@@ -1,0 +1,6 @@
+// Managed by Ansible (cluster-infra).
+// This affects unattended upgrades only; it does not change the running kernel.
+Unattended-Upgrade::Package-Blacklist {
+    "linux-(image|headers|modules|tools)(-.*)?";
+    "linux-(generic|virtual|lowlatency)(-.*)?";
+};

@@ -1,0 +1,14 @@
+# Ansible runtime data (kept inside the repository working tree)
+ansible/.local/*
+!ansible/.local/.gitkeep
+ansible/*.retry
+
+# Local Python tooling
+.venv/
+__pycache__/
+*.py[cod]
+
+# Editor and operating-system files
+.idea/
+.vscode/
+.DS_Store

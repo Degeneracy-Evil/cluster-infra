@@ -1,0 +1,33 @@
+---
+- name: Refresh APT package index when stale
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: "{{ base_apt_cache_valid_time }}"
+
+- name: Install required and requested base packages
+  ansible.builtin.apt:
+    name: "{{ (base_required_packages + base_packages) | unique }}"
+    state: present
+
+- name: Configure periodic APT behavior
+  ansible.builtin.template:
+    src: 20auto-upgrades.j2
+    dest: /etc/apt/apt.conf.d/20auto-upgrades
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure unattended kernel upgrade policy
+  ansible.builtin.template:
+    src: 52cluster-infra-kernel-policy.j2
+    dest: /etc/apt/apt.conf.d/52cluster-infra-kernel-policy
+    owner: root
+    group: root
+    mode: "0644"
+  when: kernel_hold | bool
+
+- name: Remove kernel blacklist when kernel hold is disabled
+  ansible.builtin.file:
+    path: /etc/apt/apt.conf.d/52cluster-infra-kernel-policy
+    state: absent
+  when: not (kernel_hold | bool)

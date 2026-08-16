@@ -1,0 +1,4 @@
+# Managed by Ansible (cluster-infra).
+{% for key, value in base_ssh_settings | dictsort %}
+{{ key }} {{ value }}
+{% endfor %}

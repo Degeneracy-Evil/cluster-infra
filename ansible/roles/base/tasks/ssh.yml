@@ -1,0 +1,25 @@
+---
+- name: Ensure SSH configuration drop-in directory exists
+  ansible.builtin.file:
+    path: /etc/ssh/sshd_config.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Configure cluster SSH server settings
+  ansible.builtin.template:
+    src: 60-cluster-infra.conf.j2
+    dest: /etc/ssh/sshd_config.d/60-cluster-infra.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify:
+    - Validate SSH configuration
+    - Reload SSH server
+
+- name: Enable SSH server
+  ansible.builtin.systemd_service:
+    name: ssh.service
+    enabled: true
+    state: started

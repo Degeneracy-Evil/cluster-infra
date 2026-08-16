@@ -1,0 +1,143 @@
+---
+- name: Gather installed package facts
+  ansible.builtin.package_facts:
+    manager: auto
+
+- name: Gather service facts
+  ansible.builtin.service_facts:
+
+- name: Read effective system timezone
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=Timezone
+      - --value
+  register: audit_timezone_command
+  changed_when: false
+  check_mode: false
+
+- name: Check NTP synchronization state
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=NTPSynchronized
+      - --value
+  register: audit_ntp_sync_command
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Validate effective SSH server configuration
+  ansible.builtin.command: /usr/sbin/sshd -t
+  register: audit_sshd_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check periodic APT policy file
+  ansible.builtin.stat:
+    path: /etc/apt/apt.conf.d/20auto-upgrades
+  register: audit_apt_periodic_file
+
+- name: Read periodic APT policy
+  ansible.builtin.slurp:
+    src: /etc/apt/apt.conf.d/20auto-upgrades
+  register: audit_apt_periodic_raw
+  when: audit_apt_periodic_file.stat.exists
+
+- name: Check unattended kernel policy file
+  ansible.builtin.stat:
+    path: /etc/apt/apt.conf.d/52cluster-infra-kernel-policy
+  register: audit_kernel_policy_file
+
+- name: Read unattended kernel policy
+  ansible.builtin.slurp:
+    src: /etc/apt/apt.conf.d/52cluster-infra-kernel-policy
+  register: audit_kernel_policy_raw
+  when: audit_kernel_policy_file.stat.exists
+
+- name: Calculate audit results
+  ansible.builtin.set_fact:
+    audit_actual_timezone: "{{ audit_timezone_command.stdout | trim }}"
+    audit_missing_packages: >-
+      {{
+        (
+          (base_required_packages | default(['openssh-server', 'systemd-timesyncd']))
+          + (base_packages | default([]))
+          + audit_required_packages
+        )
+        | unique
+        | difference(ansible_facts.packages.keys() | list)
+        | sort
+      }}
+    audit_hostname_ok: "{{ ansible_facts['hostname'] == inventory_hostname }}"
+    audit_os_ok: "{{ ansible_facts['distribution'] == 'Ubuntu' and ansible_facts['distribution_version'] == audit_expected_os_release }}"
+    audit_kernel_ok: "{{ audit_expected_kernel | length == 0 or ansible_facts['kernel'] == audit_expected_kernel }}"
+    audit_timezone_ok: "{{ (audit_timezone_command.stdout | trim) == audit_expected_timezone }}"
+    audit_ssh_ok: "{{ audit_sshd_check.rc == 0 and ansible_facts.services.get('ssh.service', {}).get('state', 'missing') == 'running' }}"
+    audit_ntp_service_ok: "{{ ansible_facts.services.get('systemd-timesyncd.service', {}).get('state', 'missing') == 'running' }}"
+    audit_ntp_synchronized: "{{ audit_ntp_sync_command.rc == 0 and audit_ntp_sync_command.stdout | trim == 'yes' }}"
+    audit_unattended_policy_ok: >-
+      {{
+        audit_apt_periodic_file.stat.exists
+        and (
+          'APT::Periodic::Unattended-Upgrade "'
+          ~ ('0' if disable_unattended_upgrades | bool else '1')
+          ~ '";'
+        ) in (audit_apt_periodic_raw.content | default('') | b64decode)
+      }}
+    audit_kernel_policy_ok: >-
+      {{
+        (
+          not (kernel_hold | bool)
+          and not audit_kernel_policy_file.stat.exists
+        )
+        or (
+          kernel_hold | bool
+          and audit_kernel_policy_file.stat.exists
+          and 'Unattended-Upgrade::Package-Blacklist' in (audit_kernel_policy_raw.content | default('') | b64decode)
+        )
+      }}
+
+- name: Display node audit summary
+  ansible.builtin.debug:
+    msg:
+      node: "{{ inventory_hostname }}"
+      hostname: "{{ ansible_facts['hostname'] }}"
+      hostname_ok: "{{ audit_hostname_ok }}"
+      os: "{{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+      os_ok: "{{ audit_os_ok }}"
+      kernel: "{{ ansible_facts['kernel'] }}"
+      kernel_ok: "{{ audit_kernel_ok }}"
+      architecture: "{{ ansible_facts['architecture'] }}"
+      vcpus: "{{ ansible_facts['processor_vcpus'] }}"
+      memory_mb: "{{ ansible_facts['memtotal_mb'] }}"
+      uptime_seconds: "{{ ansible_facts['uptime_seconds'] }}"
+      timezone: "{{ audit_actual_timezone }}"
+      timezone_ok: "{{ audit_timezone_ok }}"
+      missing_packages: "{{ audit_missing_packages }}"
+      ssh_ok: "{{ audit_ssh_ok }}"
+      ntp_service_ok: "{{ audit_ntp_service_ok }}"
+      ntp_synchronized: "{{ audit_ntp_synchronized }}"
+      unattended_upgrade_policy_ok: "{{ audit_unattended_policy_ok }}"
+      unattended_kernel_policy_ok: "{{ audit_kernel_policy_ok }}"
+
+- name: Assert required node state
+  ansible.builtin.assert:
+    that:
+      - audit_hostname_ok | bool
+      - audit_os_ok | bool
+      - audit_kernel_ok | bool
+      - audit_timezone_ok | bool
+      - audit_missing_packages | length == 0
+      - audit_ssh_ok | bool
+      - audit_ntp_service_ok | bool
+      - audit_unattended_policy_ok | bool
+      - audit_kernel_policy_ok | bool
+      - not (audit_require_ntp_synchronized | bool) or audit_ntp_synchronized | bool
+    success_msg: "{{ inventory_hostname }} passed the base system audit"
+    fail_msg: "{{ inventory_hostname }} failed the base system audit; inspect the summary above"
+    quiet: true
+  when: audit_fail_on_mismatch | bool

@@ -1,0 +1,18 @@
+---
+- name: Manage cluster sysctl settings
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    state: present
+    sysctl_file: /etc/sysctl.d/99-cluster-infra.conf
+    sysctl_set: true
+    reload: true
+  loop: "{{ base_sysctl | dict2items }}"
+  loop_control:
+    label: "{{ item.key }}"
+
+- name: Remove cluster sysctl file when no settings are defined
+  ansible.builtin.file:
+    path: /etc/sysctl.d/99-cluster-infra.conf
+    state: absent
+  when: base_sysctl | length == 0

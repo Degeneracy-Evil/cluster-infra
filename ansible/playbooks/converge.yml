@@ -1,0 +1,8 @@
+---
+- name: Safely converge base configuration
+  hosts: compute
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: base

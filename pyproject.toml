@@ -1,0 +1,12 @@
+[project]
+name = "cluster-infra-tooling"
+version = "0.1.0"
+description = "Repository-local development tools for cluster-infra"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+  "ansible-core>=2.16",
+  "ansible-lint>=24.0",
+]

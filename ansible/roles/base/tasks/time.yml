@@ -1,0 +1,10 @@
+---
+- name: Configure system timezone
+  community.general.timezone:
+    name: "{{ timezone }}"
+
+- name: Enable systemd-timesyncd
+  ansible.builtin.systemd_service:
+    name: systemd-timesyncd.service
+    enabled: true
+    state: started

@@ -1,0 +1,22 @@
+---
+- name: Set hostname from inventory
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: Configure APT and base packages
+  ansible.builtin.import_tasks: apt.yml
+
+- name: Configure time synchronization
+  ansible.builtin.import_tasks: time.yml
+
+- name: Configure SSH server
+  ansible.builtin.import_tasks: ssh.yml
+
+- name: Configure administrator users
+  ansible.builtin.import_tasks: users.yml
+
+- name: Configure sysctl settings
+  ansible.builtin.import_tasks: sysctl.yml
+
+- name: Configure resource limits
+  ansible.builtin.import_tasks: limits.yml

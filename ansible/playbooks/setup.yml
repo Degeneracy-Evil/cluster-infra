@@ -1,0 +1,28 @@
+---
+- name: Initial setup for Ubuntu compute nodes
+  hosts: compute
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Verify supported operating system before changes
+      ansible.builtin.assert:
+        that:
+          - ansible_facts['distribution'] == 'Ubuntu'
+          - ansible_facts['distribution_version'] == os_release
+        fail_msg: >-
+          {{ inventory_hostname }} runs {{ ansible_facts['distribution'] }}
+          {{ ansible_facts['distribution_version'] }}; expected Ubuntu {{ os_release }}.
+        quiet: true
+
+  tasks:
+    - name: Apply base system configuration
+      ansible.builtin.import_role:
+        name: base
+
+    - name: Apply pending handlers before audit
+      ansible.builtin.meta: flush_handlers
+
+    - name: Audit configured node
+      ansible.builtin.import_role:
+        name: audit

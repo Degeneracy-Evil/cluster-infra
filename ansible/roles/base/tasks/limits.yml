@@ -1,0 +1,29 @@
+---
+- name: Validate resource limit definitions
+  ansible.builtin.assert:
+    that:
+      - item.domain is defined
+      - item.type is defined
+      - item.type in ['soft', 'hard', '-']
+      - item.item is defined
+      - item.value is defined
+    fail_msg: "Invalid base_limits entry: {{ item }}"
+    quiet: true
+  loop: "{{ base_limits }}"
+  loop_control:
+    label: "{{ item.domain | default('undefined') }} {{ item.item | default('undefined') }}"
+
+- name: Configure cluster resource limits
+  ansible.builtin.template:
+    src: 99-cluster-infra.conf.j2
+    dest: /etc/security/limits.d/99-cluster-infra.conf
+    owner: root
+    group: root
+    mode: "0644"
+  when: base_limits | length > 0
+
+- name: Remove cluster resource limits when none are defined
+  ansible.builtin.file:
+    path: /etc/security/limits.d/99-cluster-infra.conf
+    state: absent
+  when: base_limits | length == 0

@@ -1,0 +1,11 @@
+---
+- name: Critical version changes are not implemented yet
+  hosts: compute
+  gather_facts: false
+
+  tasks:
+    - name: Stop safely instead of changing kernel or driver versions
+      ansible.builtin.fail:
+        msg: >-
+          apply-versions.yml is a first-stage placeholder. It intentionally
+          makes no changes and never reboots a node.

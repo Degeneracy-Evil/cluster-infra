@@ -1,0 +1,16 @@
+---
+audit_expected_os_release: "{{ os_release | default('24.04') }}"
+audit_expected_timezone: "{{ timezone | default('Etc/UTC') }}"
+audit_expected_kernel: ""
+
+base_required_packages:
+  - openssh-server
+  - systemd-timesyncd
+base_packages: []
+audit_required_packages: []
+disable_unattended_upgrades: true
+kernel_hold: true
+
+audit_fail_on_mismatch: true
+# Freshly booted nodes may need time before the first synchronization completes.
+audit_require_ntp_synchronized: false

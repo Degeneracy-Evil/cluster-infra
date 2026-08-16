@@ -1,0 +1,28 @@
+---
+cluster_name: test-cluster
+
+os_release: "24.04"
+timezone: Asia/Shanghai
+
+ansible_user: clusteradmin
+
+disable_unattended_upgrades: true
+kernel_hold: true
+
+base_packages:
+  - vim
+  - curl
+  - wget
+  - git
+  - htop
+  - tmux
+  - rsync
+  - jq
+  - pciutils
+  - usbutils
+  - lsof
+  - tree
+
+base_admin_users: []
+base_sysctl: {}
+base_limits: []
