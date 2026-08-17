@@ -128,6 +128,7 @@
       vcpus: "{{ audit_cpu_vcpus }}"
       memory_mb: "{{ audit_memory_mb }}"
       root_capacity_gb: "{{ audit_root_capacity_gb }}"
+      gpu_detection: "{{ gpu_detection_status }}"
       gpu_detection_available: "{{ gpu_detection_available }}"
       gpu_present: "{{ gpu_present }}"
       gpu_count: "{{ gpu_count }}"
@@ -162,7 +163,7 @@
       - audit_ntp_service_ok | bool
       - audit_unattended_policy_ok | bool
       - audit_kernel_policy_ok | bool
-      - gpu_detection_available | bool
+      - not (nvidia_gpu_required | bool) or gpu_detection_available | bool
       - not (nvidia_gpu_required | bool) or gpu_present | bool
       - nvidia_driver_baseline_ok | bool
       - not (audit_require_ntp_synchronized | bool) or audit_ntp_synchronized | bool

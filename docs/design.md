@@ -77,6 +77,10 @@ GPU audit 通过 PCI class `0300/0302/0380` 检测 NVIDIA 硬件，因此 Driver
 `nvcc` 只用于判断可选 CUDA Toolkit。CPU-only 节点默认合法；需要 GPU 时显式设置
 `nvidia_gpu_required: true`。
 
+尚未经过 setup 的节点可能没有 `pciutils`。此时 audit 明确报告
+`GPU detection unavailable`：GPU 非必需节点继续通过，GPU 必需节点因无法可靠确认
+硬件而失败。Driver apply 始终要求检测有效且确认 GPU 存在。
+
 Driver baseline 支持 branch 和 exact version。配置 exact version 时优先精确比较；
 否则比较 branch；两个值都为空时只报告。role 不根据 GPU 型号猜测目标版本。
 

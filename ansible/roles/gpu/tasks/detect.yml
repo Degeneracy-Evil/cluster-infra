@@ -75,6 +75,12 @@
 - name: Calculate hardware and software detection results
   ansible.builtin.set_fact:
     gpu_detection_available: "{{ gpu_lspci_command.rc == 0 }}"
+    gpu_detection_status: >-
+      {{
+        'available'
+        if gpu_lspci_command.rc == 0
+        else 'GPU detection unavailable'
+      }}
     gpu_present: "{{ gpu_pci_display_lines | length > 0 }}"
     gpu_count: "{{ gpu_pci_display_lines | length }}"
     gpu_models: >-

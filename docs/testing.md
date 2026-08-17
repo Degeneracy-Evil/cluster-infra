@@ -79,6 +79,20 @@ kernel_headers=False
 任务在安装前置断言处清晰失败，recap 为 `changed=0`；APT candidate 查询和安装任务
 均未执行。VM 中没有安装 Driver、CUDA Toolkit 或 kernel，也没有执行 reboot。
 
+## `lspci` 缺失边界回归
+
+在隔离的 `n01` VM 内临时隐藏 `/usr/bin/lspci`，模拟尚未执行 setup、没有
+`pciutils` 的现有服务器。两种 inventory 语义均已验证：
+
+- `nvidia_gpu_required: false`：摘要明确显示
+  `gpu_detection: GPU detection unavailable` 和
+  `gpu_detection_available: false`，audit 成功且 `changed=0`；
+- `nvidia_gpu_required: true`：相同状态在 GPU 检测有效性断言处失败，recap 仍为
+  `changed=0`。
+
+两次测试都没有修改 Driver、kernel 或 CUDA Toolkit。每次 audit 后均恢复并确认
+`/usr/bin/lspci` 可执行；当前 NVIDIA PCI class 筛选逻辑没有调整。
+
 ## 尚待真实硬件验证
 
 仓库当前只有 `example` 和使用 RFC 5737 地址的 `test` inventory，没有三台真实机器

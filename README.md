@@ -57,6 +57,9 @@ nvidia_driver_expected_branch: "595"
 nvidia_driver_expected_version: ""
 ```
 
+若尚未安装 `pciutils`，audit 会明确报告 `GPU detection unavailable`。这不会使默认的
+CPU-only/非必需 GPU 节点失败；设置 `nvidia_gpu_required: true` 时仍会严格失败。
+
 ## 验证和执行
 
 ```bash
