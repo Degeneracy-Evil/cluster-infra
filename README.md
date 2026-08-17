@@ -1,8 +1,9 @@
 # Cluster Infra
 
-面向 3～20 台 Ubuntu 24.04 HPC / AI 节点的基础设施配置仓库。当前 v0.2
-实现 Ansible 基础配置、显式声明的 Fabric 网络配置和只读审计；MAAS、GPU、
-RDMA tuning、Slurm、Kubernetes 与监控尚未实现。
+面向 3～20 台 Ubuntu 24.04 HPC / AI 节点的基础设施配置仓库。当前 v0.3
+实现 Ansible 基础配置、显式声明的 Fabric 网络、硬件与 NVIDIA GPU/Driver/CUDA
+Toolkit 只读审计，以及显式的 NVIDIA Driver package 安装入口。MAAS、RDMA
+tuning、Slurm、Kubernetes 与监控尚未实现。
 
 ## 安全边界
 
@@ -12,7 +13,9 @@ RDMA tuning、Slurm、Kubernetes 与监控尚未实现。
   `/etc/netplan/90-cluster-fabric.yaml`，不管理默认路由、DNS 或管理网卡。
 - Fabric 变更先通过 `netplan generate`，成功后才执行 `netplan apply`；无文件变化
   时不会 apply。
-- `apply-versions.yml` 当前是安全失败的占位 playbook，不进行任何修改。
+- `fabric_interfaces: []` 会且只会删除本项目管理的 Fabric Netplan 文件。
+- `apply-versions.yml` 是显式危险操作入口，只安装 inventory 明确列出的 NVIDIA
+  Driver package；它不切换 kernel、不安装 CUDA Toolkit，也不 reboot。
 - `inventories/test` 默认使用 RFC 5737 文档地址，必须替换后才能连接测试 VM。
 - 执行前应检查 inventory 和 `--limit`，先使用 `--check --diff` 预览。
 
@@ -45,6 +48,15 @@ fabric_interfaces:
     mtu: 9000
 ```
 
+GPU、Driver 和 CUDA Toolkit 是三个独立审计状态。CPU-only 节点默认合法；Driver
+基线可按 branch 或精确版本声明，精确版本优先：
+
+```yaml
+nvidia_gpu_required: false
+nvidia_driver_expected_branch: "595"
+nvidia_driver_expected_version: ""
+```
+
 ## 验证和执行
 
 ```bash
@@ -68,6 +80,19 @@ uv run --project .. ansible-playbook \
   -i inventories/test/hosts.yml playbooks/audit.yml
 ```
 
+只有确认目标节点、package 和维护窗口后才执行 Driver apply。务必使用精确
+`--limit`；playbook 会检查 GPU、当前 kernel、headers 和 APT candidate，并逐台执行：
+
+```bash
+uv run --project .. ansible-playbook \
+  -i inventories/<cluster>/hosts.yml playbooks/apply-versions.yml \
+  --limit nXX \
+  -e '{"nvidia_driver_packages":["nvidia-driver-595-server-open"]}'
+```
+
+Driver package 发生变化时结果会报告 `reboot_required`，但不会自动 reboot。
+
 幂等测试需在 Ubuntu 24.04 VM 上连续执行两次 `converge.yml`，第二次目标为
 `changed=0`。详细设计和变量说明见 [docs/design.md](docs/design.md)；阶段需求见
-[docs/dev.md](docs/dev.md) 和 [docs/dev-v0.2.md](docs/dev-v0.2.md)。
+[docs/dev.md](docs/dev.md)、[docs/dev-v0.2.md](docs/dev-v0.2.md) 和
+[docs/dev-v0.3.md](docs/dev-v0.3.md)。

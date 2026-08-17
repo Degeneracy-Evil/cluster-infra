@@ -2,6 +2,9 @@
 audit_expected_os_release: "{{ os_release | default('24.04') }}"
 audit_expected_timezone: "{{ timezone | default('Etc/UTC') }}"
 audit_expected_kernel: ""
+nvidia_gpu_required: false
+nvidia_driver_expected_branch: ""
+nvidia_driver_expected_version: ""
 
 base_required_packages:
   - openssh-server

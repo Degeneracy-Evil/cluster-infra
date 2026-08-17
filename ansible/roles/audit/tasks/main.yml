@@ -58,6 +58,14 @@
   register: audit_kernel_policy_raw
   when: audit_kernel_policy_file.stat.exists
 
+- name: Calculate hardware inventory
+  ansible.builtin.include_tasks: hardware.yml
+
+- name: Detect GPU hardware and software state
+  ansible.builtin.include_role:
+    name: gpu
+    tasks_from: detect
+
 - name: Calculate audit results
   ansible.builtin.set_fact:
     audit_actual_timezone: "{{ audit_timezone_command.stdout | trim }}"
@@ -111,9 +119,27 @@
       os_ok: "{{ audit_os_ok }}"
       kernel: "{{ ansible_facts['kernel'] }}"
       kernel_ok: "{{ audit_kernel_ok }}"
+      kernel_headers: "{{ 'OK' if kernel_headers_available else 'MISSING' }}"
       architecture: "{{ ansible_facts['architecture'] }}"
-      vcpus: "{{ ansible_facts['processor_vcpus'] }}"
-      memory_mb: "{{ ansible_facts['memtotal_mb'] }}"
+      cpu_model: "{{ audit_cpu_model }}"
+      cpu_sockets: "{{ audit_cpu_sockets }}"
+      cpu_cores_per_socket: "{{ audit_cpu_cores_per_socket }}"
+      cpu_cores_total: "{{ audit_cpu_cores_total }}"
+      vcpus: "{{ audit_cpu_vcpus }}"
+      memory_mb: "{{ audit_memory_mb }}"
+      root_capacity_gb: "{{ audit_root_capacity_gb }}"
+      gpu_detection_available: "{{ gpu_detection_available }}"
+      gpu_present: "{{ gpu_present }}"
+      gpu_count: "{{ gpu_count }}"
+      gpu_models: "{{ gpu_models }}"
+      nvidia_driver_loaded: "{{ nvidia_driver_loaded }}"
+      nvidia_driver_available: "{{ nvidia_driver_available }}"
+      nvidia_driver_version: "{{ nvidia_driver_version }}"
+      nvidia_driver_branch: "{{ nvidia_driver_branch }}"
+      nvidia_driver_baseline_mode: "{{ nvidia_driver_baseline_mode }}"
+      nvidia_driver_baseline_ok: "{{ nvidia_driver_baseline_ok }}"
+      cuda_toolkit_installed: "{{ cuda_toolkit_installed }}"
+      cuda_toolkit_version: "{{ cuda_toolkit_version }}"
       uptime_seconds: "{{ ansible_facts['uptime_seconds'] }}"
       timezone: "{{ audit_actual_timezone }}"
       timezone_ok: "{{ audit_timezone_ok }}"
@@ -136,9 +162,12 @@
       - audit_ntp_service_ok | bool
       - audit_unattended_policy_ok | bool
       - audit_kernel_policy_ok | bool
+      - gpu_detection_available | bool
+      - not (nvidia_gpu_required | bool) or gpu_present | bool
+      - nvidia_driver_baseline_ok | bool
       - not (audit_require_ntp_synchronized | bool) or audit_ntp_synchronized | bool
-    success_msg: "{{ inventory_hostname }} passed the base system audit"
-    fail_msg: "{{ inventory_hostname }} failed the base system audit; inspect the summary above"
+    success_msg: "{{ inventory_hostname }} passed the system and hardware audit"
+    fail_msg: "{{ inventory_hostname }} failed the system or hardware audit; inspect the summary above"
     quiet: true
   when: audit_fail_on_mismatch | bool
 

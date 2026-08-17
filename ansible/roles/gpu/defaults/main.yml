@@ -1,0 +1,5 @@
+---
+nvidia_gpu_required: false
+nvidia_driver_expected_branch: ""
+nvidia_driver_expected_version: ""
+nvidia_driver_packages: []

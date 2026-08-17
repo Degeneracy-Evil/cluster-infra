@@ -9,6 +9,15 @@ ansible_user: clusteradmin
 disable_unattended_upgrades: true
 kernel_hold: true
 
+# CPU-only nodes remain valid unless this is overridden per host.
+nvidia_gpu_required: false
+# Exact version takes precedence when both values are configured.
+nvidia_driver_expected_branch: ""
+nvidia_driver_expected_version: ""
+# Used only by the explicitly invoked apply-versions.yml playbook.
+nvidia_driver_packages: []
+#  - nvidia-driver-595-server-open
+
 base_packages:
   - vim
   - curl

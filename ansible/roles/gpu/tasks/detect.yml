@@ -1,0 +1,156 @@
+---
+- name: Validate GPU audit baseline variables
+  ansible.builtin.assert:
+    that:
+      - nvidia_gpu_required is boolean
+      - nvidia_driver_expected_branch is string
+      - nvidia_driver_expected_version is string
+    fail_msg: >-
+      nvidia_gpu_required must be boolean and NVIDIA driver baseline values
+      must be strings.
+    quiet: true
+
+- name: Read NVIDIA PCI devices
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/env
+      - lspci
+      - -Dnn
+      - -d
+      - "10de:"
+  register: gpu_lspci_command
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check NVIDIA kernel module state
+  ansible.builtin.stat:
+    path: /sys/module/nvidia
+  register: gpu_nvidia_module
+
+- name: Read NVIDIA driver version
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/env
+      - nvidia-smi
+      - --query-gpu=driver_version
+      - --format=csv,noheader,nounits
+  register: gpu_nvidia_smi_command
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Read CUDA Toolkit compiler version
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/env
+      - nvcc
+      - --version
+  register: gpu_nvcc_command
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Check current kernel module directory
+  ansible.builtin.stat:
+    path: "/lib/modules/{{ ansible_facts['kernel'] }}"
+  register: gpu_kernel_module_directory
+
+- name: Check current kernel headers
+  ansible.builtin.stat:
+    path: "/lib/modules/{{ ansible_facts['kernel'] }}/build"
+    follow: true
+  register: gpu_kernel_headers_directory
+
+- name: Select NVIDIA display-class PCI devices
+  ansible.builtin.set_fact:
+    gpu_pci_display_lines: >-
+      {{
+        gpu_lspci_command.stdout_lines
+        | default([])
+        | select('search', '\\[(0300|0302|0380)\\]')
+        | list
+      }}
+
+- name: Calculate hardware and software detection results
+  ansible.builtin.set_fact:
+    gpu_detection_available: "{{ gpu_lspci_command.rc == 0 }}"
+    gpu_present: "{{ gpu_pci_display_lines | length > 0 }}"
+    gpu_count: "{{ gpu_pci_display_lines | length }}"
+    gpu_models: >-
+      {{
+        gpu_pci_display_lines
+        | map('regex_replace', '^.*\\[(0300|0302|0380)\\]:\\s*', '')
+        | map('regex_replace', '\\s+\\[10de:[0-9a-fA-F]{4}\\].*$', '')
+        | unique
+        | sort
+        | list
+      }}
+    nvidia_driver_loaded: "{{ gpu_nvidia_module.stat.exists }}"
+    nvidia_driver_available: "{{ gpu_nvidia_smi_command.rc == 0 }}"
+    nvidia_driver_version: >-
+      {{
+        gpu_nvidia_smi_command.stdout_lines
+        | default([])
+        | reject('equalto', '')
+        | unique
+        | first
+        | default('')
+        | trim
+      }}
+    cuda_toolkit_installed: "{{ gpu_nvcc_command.rc == 0 }}"
+    cuda_toolkit_version: >-
+      {{
+        (
+          (gpu_nvcc_command.stdout | default(''))
+          ~ '\n'
+          ~ (gpu_nvcc_command.stderr | default(''))
+        )
+        | regex_findall('release\\s+([0-9.]+)')
+        | first
+        | default('')
+      }}
+    kernel_recognized: "{{ gpu_kernel_module_directory.stat.exists }}"
+    kernel_headers_available: "{{ gpu_kernel_headers_directory.stat.exists }}"
+
+- name: Calculate NVIDIA driver baseline result
+  ansible.builtin.set_fact:
+    nvidia_driver_branch: >-
+      {{ nvidia_driver_version.split('.')[0] if nvidia_driver_version | length > 0 else '' }}
+    nvidia_driver_baseline_mode: >-
+      {{
+        'exact'
+        if nvidia_driver_expected_version | length > 0
+        else (
+          'branch'
+          if nvidia_driver_expected_branch | length > 0
+          else 'report-only'
+        )
+      }}
+    nvidia_driver_baseline_ok: >-
+      {{
+        (
+          not (gpu_present | bool)
+          and not (nvidia_gpu_required | bool)
+        )
+        or (
+          gpu_present | bool
+          and (
+            (
+              nvidia_driver_expected_version | length > 0
+              and nvidia_driver_available | bool
+              and nvidia_driver_version == nvidia_driver_expected_version
+            )
+            or (
+              nvidia_driver_expected_version | length == 0
+              and nvidia_driver_expected_branch | length > 0
+              and nvidia_driver_available | bool
+              and nvidia_driver_version.split('.')[0] == nvidia_driver_expected_branch
+            )
+            or (
+              nvidia_driver_expected_version | length == 0
+              and nvidia_driver_expected_branch | length == 0
+            )
+          )
+        )
+      }}

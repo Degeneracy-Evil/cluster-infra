@@ -1,0 +1,33 @@
+---
+- name: Calculate hardware audit facts
+  ansible.builtin.set_fact:
+    audit_cpu_model: >-
+      {{
+        ansible_facts.get('processor', [])
+        | map('string')
+        | reject('match', '^[0-9]+$')
+        | unique
+        | last
+        | default('unknown')
+      }}
+    audit_cpu_sockets: "{{ ansible_facts.get('processor_count', 0) }}"
+    audit_cpu_cores_per_socket: "{{ ansible_facts.get('processor_cores', 0) }}"
+    audit_cpu_cores_total: >-
+      {{
+        ansible_facts.get('processor_count', 0) | int
+        * ansible_facts.get('processor_cores', 0) | int
+      }}
+    audit_cpu_vcpus: "{{ ansible_facts.get('processor_vcpus', 0) }}"
+    audit_memory_mb: "{{ ansible_facts.get('memtotal_mb', 0) }}"
+    audit_root_mount: >-
+      {{
+        ansible_facts.get('mounts', [])
+        | selectattr('mount', 'equalto', '/')
+        | first
+        | default({})
+      }}
+
+- name: Calculate root filesystem capacity
+  ansible.builtin.set_fact:
+    audit_root_capacity_gb: >-
+      {{ (audit_root_mount.get('size_total', 0) | int / 1073741824) | round(2) }}

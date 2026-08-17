@@ -1,0 +1,3 @@
+---
+- name: Apply explicitly requested NVIDIA driver version
+  ansible.builtin.import_tasks: apply.yml

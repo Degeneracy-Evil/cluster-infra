@@ -1,0 +1,79 @@
+---
+- name: Detect GPU and kernel prerequisites
+  ansible.builtin.import_tasks: detect.yml
+
+- name: Validate NVIDIA driver package declaration
+  ansible.builtin.assert:
+    that:
+      - nvidia_driver_packages is sequence
+      - nvidia_driver_packages is not string
+      - nvidia_driver_packages is not mapping
+      - nvidia_driver_packages | length > 0
+      - nvidia_driver_packages | select('string') | list | length == nvidia_driver_packages | length
+      - nvidia_driver_packages | reject('equalto', '') | list | length == nvidia_driver_packages | length
+    fail_msg: >-
+      nvidia_driver_packages must explicitly list one or more complete APT
+      package names; the role never guesses a package.
+    quiet: true
+
+- name: Validate NVIDIA driver installation prerequisites
+  ansible.builtin.assert:
+    that:
+      - gpu_detection_available | bool
+      - gpu_present | bool
+      - kernel_recognized | bool
+      - kernel_headers_available | bool
+    fail_msg: >-
+      NVIDIA driver prerequisites failed on {{ inventory_hostname }}:
+      gpu_detection={{ gpu_detection_available }}, gpu_present={{ gpu_present }},
+      kernel={{ ansible_facts['kernel'] }}, kernel_recognized={{ kernel_recognized }},
+      kernel_headers={{ kernel_headers_available }}.
+    quiet: true
+
+- name: Check declared NVIDIA driver packages are available
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/apt-cache
+      - show
+      - "{{ item }}"
+  register: gpu_driver_package_candidates
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ nvidia_driver_packages }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Require all NVIDIA driver packages to be available
+  ansible.builtin.assert:
+    that:
+      - item.rc == 0
+      - item.stdout | length > 0
+    fail_msg: >-
+      NVIDIA driver package {{ item.item }} is not available from the current
+      APT metadata on {{ inventory_hostname }}.
+    quiet: true
+  loop: "{{ gpu_driver_package_candidates.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Install explicitly declared NVIDIA driver packages
+  ansible.builtin.apt:
+    name: "{{ nvidia_driver_packages }}"
+    state: present
+  register: gpu_driver_install
+
+- name: Check operating system reboot marker
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: gpu_reboot_marker
+
+- name: Report NVIDIA driver apply result
+  ansible.builtin.debug:
+    msg:
+      node: "{{ inventory_hostname }}"
+      packages: "{{ nvidia_driver_packages }}"
+      packages_changed: "{{ gpu_driver_install.changed }}"
+      reboot_required: >-
+        {{ gpu_driver_install.changed or gpu_reboot_marker.stat.exists }}
+      reboot_performed: false

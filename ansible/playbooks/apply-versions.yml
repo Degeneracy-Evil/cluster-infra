@@ -1,11 +1,10 @@
 ---
-- name: Critical version changes are not implemented yet
+- name: Explicitly apply NVIDIA driver packages
   hosts: compute
-  gather_facts: false
+  become: true
+  gather_facts: true
+  serial: 1
+  any_errors_fatal: true
 
-  tasks:
-    - name: Stop safely instead of changing kernel or driver versions
-      ansible.builtin.fail:
-        msg: >-
-          apply-versions.yml is a first-stage placeholder. It intentionally
-          makes no changes and never reboots a node.
+  roles:
+    - role: gpu

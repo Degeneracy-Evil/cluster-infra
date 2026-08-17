@@ -84,3 +84,12 @@
     - Validate Netplan configuration
     - Apply Fabric Netplan configuration
   when: fabric_interfaces | length > 0
+
+- name: Remove cluster Fabric configuration when no interfaces are declared
+  ansible.builtin.file:
+    path: /etc/netplan/90-cluster-fabric.yaml
+    state: absent
+  notify:
+    - Validate Netplan configuration
+    - Apply Fabric Netplan configuration
+  when: fabric_interfaces | length == 0
