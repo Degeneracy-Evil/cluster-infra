@@ -20,6 +20,10 @@
       ansible.builtin.import_role:
         name: base
 
+    - name: Apply Fabric network configuration
+      ansible.builtin.import_role:
+        name: network
+
     - name: Apply pending handlers before audit
       ansible.builtin.meta: flush_handlers
 

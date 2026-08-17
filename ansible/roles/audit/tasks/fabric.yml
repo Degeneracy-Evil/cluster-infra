@@ -1,0 +1,138 @@
+---
+- name: Initialize Fabric audit results
+  ansible.builtin.set_fact:
+    audit_fabric_results: []
+
+- name: Read Fabric interface link state
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -j
+      - link
+      - show
+      - dev
+      - "{{ item.name }}"
+  register: audit_fabric_link_commands
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ fabric_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Read declared Fabric addresses
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -j
+      - address
+      - show
+      - dev
+      - "{{ item.name }}"
+      - to
+      - "{{ item.address }}"
+  register: audit_fabric_address_commands
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ fabric_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Read Fabric default routes
+  ansible.builtin.command:
+    argv:
+      - ip
+      - -j
+      - route
+      - show
+      - default
+      - dev
+      - "{{ item.name }}"
+  register: audit_fabric_route_commands
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  loop: "{{ fabric_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Calculate Fabric audit results
+  ansible.builtin.set_fact:
+    audit_fabric_results: >-
+      {{
+        (audit_fabric_results | default([]))
+        + [
+          {
+            'name': item.item.name,
+            'expected_address': item.item.address,
+            'expected_mtu': item.item.mtu,
+            'exists': item.rc == 0,
+            'link': (
+              item.rc == 0
+              and 'UP' in ((item.stdout | from_json | first | default({})).get('flags', []))
+            ),
+            'address': (
+              audit_fabric_address_commands.results[audit_fabric_index].rc == 0
+              and (
+                (
+                  audit_fabric_address_commands.results[audit_fabric_index].stdout
+                  | from_json
+                  | first
+                  | default({})
+                ).get('addr_info', [])
+                | selectattr('local', 'equalto', item.item.address.split('/')[0])
+                | selectattr('prefixlen', 'equalto', item.item.address.split('/')[1] | int)
+                | list
+                | length
+              ) > 0
+            ),
+            'mtu': (
+              item.rc == 0
+              and (item.stdout | from_json | first | default({})).get('mtu', 0) | int
+                  == item.item.mtu | int
+            ),
+            'default_route': (
+              audit_fabric_route_commands.results[audit_fabric_index].rc == 0
+              and (audit_fabric_route_commands.results[audit_fabric_index].stdout | from_json | length) == 0
+            )
+          }
+        ]
+      }}
+  loop: "{{ audit_fabric_link_commands.results }}"
+  loop_control:
+    index_var: audit_fabric_index
+    label: "{{ item.item.name }}"
+
+- name: Display Fabric audit summary
+  ansible.builtin.debug:
+    msg:
+      node: "{{ inventory_hostname }}"
+      interface: "{{ item.name }}"
+      exists: "{{ 'OK' if item.exists else 'FAIL' }}"
+      link: "{{ 'OK' if item.link else 'FAIL' }}"
+      address: "{{ 'OK' if item.address else 'FAIL' }}"
+      mtu: "{{ 'OK' if item.mtu else 'FAIL' }}"
+      default_route: "{{ 'OK' if item.default_route else 'FAIL' }}"
+  loop: "{{ audit_fabric_results }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Assert required Fabric state
+  ansible.builtin.assert:
+    that:
+      - item.exists | bool
+      - item.link | bool
+      - item.address | bool
+      - item.mtu | bool
+      - item.default_route | bool
+    success_msg: >-
+      {{ inventory_hostname }} {{ item.name }} passed the Fabric network audit
+    fail_msg: >-
+      {{ inventory_hostname }} {{ item.name }} failed the Fabric network audit;
+      inspect the summary above
+    quiet: true
+  loop: "{{ audit_fabric_results }}"
+  loop_control:
+    label: "{{ item.name }}"
+  when: audit_fail_on_mismatch | bool

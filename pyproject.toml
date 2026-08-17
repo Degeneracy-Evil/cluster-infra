@@ -1,6 +1,6 @@
 [project]
 name = "cluster-infra-tooling"
-version = "0.1.0"
+version = "0.2.0"
 description = "Repository-local development tools for cluster-infra"
 requires-python = ">=3.11"
 dependencies = []

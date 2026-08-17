@@ -1,0 +1,10 @@
+# Managed by cluster-infra Ansible. Fabric interfaces only.
+network:
+  version: 2
+  ethernets:
+{% for interface in fabric_interfaces | sort(attribute='name') %}
+    "{{ interface.name }}":
+      addresses:
+        - "{{ interface.address }}"
+      mtu: {{ interface.mtu }}
+{% endfor %}

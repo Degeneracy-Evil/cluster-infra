@@ -1,6 +1,9 @@
 ---
 profile: basic
 
+exclude_paths:
+  - .local/
+
 # These names are the documented inventory API shared by roles and playbooks.
 skip_list:
   - var-naming[no-role-prefix]

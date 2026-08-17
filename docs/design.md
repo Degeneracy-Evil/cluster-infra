@@ -1,10 +1,10 @@
-# Cluster Infra v0.1 设计
+# Cluster Infra v0.2 设计
 
 ## 范围
 
-当前阶段只提供 Ubuntu 24.04 计算节点的 Ansible 基础配置和状态审计。
-MAAS、网络拓扑、GPU、RDMA、调度系统、容器平台、监控以及关键版本切换均不在
-本阶段实现范围内。
+当前阶段提供 Ubuntu 24.04 计算节点的 Ansible 基础配置、独立 Fabric 网络配置和
+状态审计。MAAS、管理网络、NAT、GPU、RDMA tuning、调度系统、容器平台、监控以及
+关键版本切换均不在本阶段实现范围内。
 
 ## 架构原则
 
@@ -15,13 +15,16 @@ MAAS、网络拓扑、GPU、RDMA、调度系统、容器平台、监控以及关
 4. `converge.yml` 只管理可安全重复应用的状态；关键版本切换和 reboot 不属于它。
 5. `audit.yml` 只读取和判断状态，不触发 handler，也不执行修复。
 6. 扩展以实际需求为准，不提前引入复杂分组和抽象。
+7. Management network 由 MAAS 或现有系统管理；Ansible 不修改当前默认路由接口。
+8. Fabric network 由 Ansible 管理，但仅限 inventory 中显式声明的
+   `fabric_interfaces`。
 
 ## 执行入口
 
 | Playbook | 用途 | 行为 |
 | --- | --- | --- |
-| `setup.yml` | 新装节点首次配置 | 校验 Ubuntu 版本，执行 `base`，刷新 handler 后执行 `audit` |
-| `converge.yml` | 日常维护 | 仅执行 `base`，不 reboot、不切换 kernel/驱动 |
+| `setup.yml` | 新装节点首次配置 | 校验 Ubuntu 版本，执行 `base`、`network`，刷新 handler 后执行 `audit` |
+| `converge.yml` | 日常维护 | 执行 `base`、`network`，不 reboot、不切换 kernel/驱动 |
 | `audit.yml` | 状态检查 | 只读采集并汇总，不修改节点 |
 | `apply-versions.yml` | 后续版本管理占位 | 当前主动失败且不修改任何状态 |
 
@@ -48,6 +51,28 @@ SSH 默认仅设置连接保活，不修改 `PasswordAuthentication`、`PermitRo
 `apt-mark hold`、不会安装或删除内核，也不会改变当前启动内核。设置为 `false` 时只
 删除本项目管理的黑名单文件。
 
+## `network` role
+
+`network` 只读取每台主机的 `fabric_interfaces`，每项包含 `name`、`address` 和
+`mtu`。它将所有 rail 稳定排序后写入独立的
+`/etc/netplan/90-cluster-fabric.yaml`，只配置静态地址与 MTU，不设置 gateway、DNS
+或 default route，也不删除或改写其他 Netplan 文件。变量未定义或为空时安全跳过。
+
+写入前会验证字段、接口名唯一性和接口是否真实存在；若声明接口等于 facts 中当前
+默认路由接口，任务会在写文件前失败，以保护管理网络。配置变化后 handler 先运行
+`netplan generate`，成功后才运行 `netplan apply`。模板没有变化时两个 handler 均
+不会执行。
+
+```yaml
+fabric_interfaces:
+  - name: enp65s0f0
+    address: 10.20.0.101/24
+    mtu: 9000
+  - name: enp65s0f1
+    address: 10.21.0.101/24
+    mtu: 9000
+```
+
 ## 变量接口
 
 | 变量 | 类型 | 说明 |
@@ -61,6 +86,7 @@ SSH 默认仅设置连接保活，不修改 `PasswordAuthentication`、`PermitRo
 | `base_admin_users` | list[mapping] | 管理员账户、组、shell、密码策略和公钥 |
 | `base_sysctl` | mapping | sysctl 名称和值 |
 | `base_limits` | list[mapping] | `domain/type/item/value` limits 条目 |
+| `fabric_interfaces` | list[mapping] | Fabric 接口的显式 `name/address/mtu` 声明；默认空列表 |
 | `audit_expected_kernel` | string | 可选的精确 kernel 基线；空值表示只报告 |
 | `audit_fail_on_mismatch` | bool | 审计异常时是否令 play 失败 |
 | `audit_require_ntp_synchronized` | bool | 是否把尚未同步 NTP 视为失败 |
@@ -73,7 +99,8 @@ SSH 默认仅设置连接保活，不修改 `PasswordAuthentication`、`PermitRo
 
 审计检查 hostname、Ubuntu release、可选 kernel 基线、timezone、基础包、SSH 配置
 及服务、NTP 服务与同步状态、periodic unattended upgrade 策略和 unattended kernel
-策略。每台节点先输出结构化摘要，再执行统一断言，便于定位差异。
+策略。对于每个声明的 Fabric 接口，还使用 `ip -j` 检查接口存在、链路 UP、CIDR、
+MTU 和无 default route。每台节点先输出结构化摘要，再执行统一断言，便于定位差异。
 
 首次启动后 NTP 可能尚未同步，因此默认只报告 `ntp_synchronized`，不据此失败；需要
 严格检查时设置 `audit_require_ntp_synchronized: true`。
@@ -83,9 +110,10 @@ SSH 默认仅设置连接保活，不修改 `PasswordAuthentication`、`PermitRo
 - APT index 使用 `cache_valid_time`，短时间内的第二次执行不重复更新。
 - 文件由稳定模板管理，只有内容变化才通知 handler。
 - SSH 配置变化后先执行 `sshd -t`，成功才 reload。
+- Fabric 模板稳定排序；Netplan 变化后先 generate，再 apply。
 - audit 中的命令均为只读，并显式设置 `changed_when: false`。
 - 项目没有任何 reboot task。
 
-合并前应执行 inventory graph、三个 playbook 的 syntax-check，并在隔离的 Ubuntu
-24.04 VM 上连续执行两次 converge。第二次应尽可能达到 `changed=0`；任何合理的
-动态变化都必须在测试记录中说明。
+合并前应执行 inventory graph、四个 playbook 的 syntax-check 和 ansible-lint，并在
+隔离的 Ubuntu 24.04 VM 上验证首次配置、Fabric 双向连通、drift 恢复、连续两次
+converge 以及只读 audit。稳定状态下 converge 和 audit 均应达到 `changed=0`。

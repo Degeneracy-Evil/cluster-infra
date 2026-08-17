@@ -1,0 +1,86 @@
+---
+- name: Validate Fabric interface collection
+  ansible.builtin.assert:
+    that:
+      - fabric_interfaces is sequence
+      - fabric_interfaces is not string
+      - fabric_interfaces is not mapping
+    fail_msg: "fabric_interfaces must be a list"
+    quiet: true
+
+- name: Validate Fabric interface entries
+  ansible.builtin.assert:
+    that:
+      - item is mapping
+      - item.name is defined
+      - item.name is string
+      - item.name is match('^[a-zA-Z0-9_.:-]+$')
+      - item.name | length <= 15
+      - item.address is defined
+      - item.address is string
+      - item.address is match('^[0-9a-fA-F:.]+/[0-9]{1,3}$')
+      - item.mtu is defined
+      - item.mtu is integer
+      - item.mtu >= 576
+      - item.mtu <= 65535
+    fail_msg: >-
+      Invalid fabric_interfaces entry {{ item | to_json }}; name, CIDR address,
+      and integer MTU are required.
+    quiet: true
+  loop: "{{ fabric_interfaces }}"
+  loop_control:
+    label: "{{ item.name | default('unnamed') }}"
+
+- name: Validate Fabric interface names are unique
+  ansible.builtin.assert:
+    that:
+      - >-
+        fabric_interfaces | map(attribute='name') | unique | length
+        == fabric_interfaces | length
+    fail_msg: "fabric_interfaces contains duplicate interface names"
+    quiet: true
+  when: fabric_interfaces | length > 0
+
+- name: Protect the management network interface
+  ansible.builtin.assert:
+    that:
+      - >-
+        ansible_facts['default_ipv4']['interface'] | default('')
+        not in (fabric_interfaces | map(attribute='name') | list)
+    fail_msg: >-
+      Refusing to manage {{ ansible_facts['default_ipv4']['interface'] }} as a
+      Fabric interface because it owns the current default route.
+    quiet: true
+  when: fabric_interfaces | length > 0
+
+- name: Check declared Fabric interfaces exist
+  ansible.builtin.stat:
+    path: "/sys/class/net/{{ item.name }}"
+  register: network_fabric_devices
+  loop: "{{ fabric_interfaces }}"
+  loop_control:
+    label: "{{ item.name }}"
+
+- name: Require declared Fabric interfaces to exist
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+    fail_msg: >-
+      Fabric interface {{ item.item.name }} does not exist on
+      {{ inventory_hostname }}; no Netplan configuration was changed.
+    quiet: true
+  loop: "{{ network_fabric_devices.results | default([]) }}"
+  loop_control:
+    label: "{{ item.item.name }}"
+
+- name: Configure declared Fabric interfaces
+  ansible.builtin.template:
+    src: 90-cluster-fabric.yaml.j2
+    dest: /etc/netplan/90-cluster-fabric.yaml
+    owner: root
+    group: root
+    mode: "0600"
+  notify:
+    - Validate Netplan configuration
+    - Apply Fabric Netplan configuration
+  when: fabric_interfaces | length > 0

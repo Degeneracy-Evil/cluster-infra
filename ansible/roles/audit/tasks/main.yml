@@ -141,3 +141,7 @@
     fail_msg: "{{ inventory_hostname }} failed the base system audit; inspect the summary above"
     quiet: true
   when: audit_fail_on_mismatch | bool
+
+- name: Audit declared Fabric interfaces
+  ansible.builtin.include_tasks: fabric.yml
+  when: fabric_interfaces | default([]) | length > 0

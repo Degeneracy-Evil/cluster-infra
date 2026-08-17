@@ -8,6 +8,7 @@ base_required_packages:
   - systemd-timesyncd
 base_packages: []
 audit_required_packages: []
+fabric_interfaces: []
 disable_unattended_upgrades: true
 kernel_hold: true
 
