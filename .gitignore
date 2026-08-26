@@ -5,7 +5,6 @@ ansible/*.retry
 
 # Local Python tooling
 .venv/
-uv.lock
 __pycache__/
 *.py[cod]
 
