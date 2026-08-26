@@ -13,6 +13,18 @@
 
 当前阶段重点开发 **Ansible 基础配置能力**。MAAS、NVIDIA GPU、RDMA、Slurm、Kubernetes、Prometheus 后续逐步加入。
 
+开发环境和 Ansible collection 均安装在仓库本地。首次初始化或依赖更新后执行：
+
+```bash
+uv sync --group dev
+cd ansible
+uv run --project .. ansible-galaxy collection install \
+  -r collections/requirements.yml -p .local/collections
+```
+
+`ansible.cfg` 已将 collection、临时文件和日志指向 `ansible/.local/`，不需要修改
+系统级 Ansible 配置。
+
 核心目标：
 
 1. 新 Ubuntu 节点可以通过一条 Ansible 命令完成基础配置。

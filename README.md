@@ -25,10 +25,10 @@ Python 工具统一由 `uv` 管理。先在仓库根目录同步隔离环境，�
 安装 collection。项目将本地临时文件、日志、缓存与 collection 放在忽略目录中。
 
 ```bash
-uv sync --dev
+uv sync --group dev
 cd ansible
 uv run --project .. ansible-galaxy collection install \
-  -r requirements.yml -p .local/collections
+  -r collections/requirements.yml -p .local/collections
 ```
 
 复制或修改 inventory，至少确认：

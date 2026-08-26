@@ -15,6 +15,16 @@
 - `setup.yml` 与 `converge.yml` 不引用 Driver apply；项目不存在 reboot task，也不
   实现 kernel 或 CUDA Toolkit 安装。
 
+## Real-hardware follow-up 静态验证
+
+2026-08-26 follow-up 中，先执行 `uv sync --group dev`，再从空的
+`ansible/.local/collections` 按 `collections/requirements.yml` 安装 collection。
+`ansible.posix 2.2.2`、`community.general 13.3.0` 及其依赖均成功安装。随后确认：
+
+- `example` 和 `test` inventory graph 均通过；
+- 四个 playbook 的 syntax-check 全部通过；
+- `ansible-lint` 为 0 failure、0 warning，并通过 production profile。
+
 ## QEMU 环境
 
 测试继续使用经官方 SHA256 校验的 Ubuntu 24.04 Minimal cloud image（2026-08-01，
@@ -93,15 +103,32 @@ kernel_headers=False
 两次测试都没有修改 Driver、kernel 或 CUDA Toolkit。每次 audit 后均恢复并确认
 `/usr/bin/lspci` 可执行；当前 NVIDIA PCI class 筛选逻辑没有调整。
 
-## 尚待真实硬件验证
+## 首次真实裸机验证
 
-仓库当前只有 `example` 和使用 RFC 5737 地址的 `test` inventory，没有三台真实机器
-的连接 inventory，因此尚未执行真实机器 audit。真实 NVIDIA Driver apply 也未获得
-明确的目标节点和 package，未执行任何真实 Driver 变更。
+首次真实裸机验证已在 MAAS 部署的 CPU-only 节点完成，补充记录于 2026-08-26：
 
-取得真实 inventory 后，第一步只运行 `audit.yml`，用于验证异构 CPU、GPU 型号与
-数量、Driver version/branch、CUDA Toolkit、kernel headers 和 Fabric 检测。只有用户
-另行明确目标节点与 package 后，才考虑单机 Driver apply。
+| 项目 | 结果 |
+| --- | --- |
+| OS | Ubuntu 24.04.4 |
+| CPU | Intel Core i5-8400 |
+| Memory | 16 GiB |
+| Storage | 1 TB HDD |
+| NVIDIA GPU | absent，CPU-only 节点合法 |
+
+MAAS 完成系统部署后的首次 `audit.yml` 只发现以下预期 drift：缺少 `tree`、
+unattended upgrade policy 不符合 inventory，以及 kernel policy 不符合 inventory。
+首次 `setup.yml` 的 recap 为 `changed=7 failed=0`；紧接着第二次执行的 recap 为
+`changed=0 failed=0`，确认真实节点上的首次收敛和幂等性符合预期。
+
+该节点未声明 Fabric 接口（`fabric_interfaces` 为空）。验证期间 Ansible 没有修改
+MAAS 管理的 management NIC，符合 network role 的安全边界。
+
+## 尚待真实 NVIDIA 硬件验证
+
+上述首台真实节点为 CPU-only，因此真实 NVIDIA GPU 的 PCI 检测、型号/数量、Driver
+version/branch 和 CUDA Toolkit 状态仍未验证。真实 NVIDIA Driver apply 也尚未执行；
+只有用户明确目标 GPU 节点、Driver package 和维护窗口后，才考虑使用精确
+`--limit` 进行单机验证。真实 GPU 节点仍应先运行只读 `audit.yml`。
 
 ## 清理确认
 
